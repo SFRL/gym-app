@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Gym Plan</title>
+  <meta name="theme-color" content="#f6f2fc" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-screen="login">
+
+  <header class="topbar">
+    <h1 class="brand">Gym<span>Plan</span></h1>
+    <div class="topbar-right">
+      <span id="sync-badge" class="sync-badge" hidden></span>
+      <button id="btn-logout" class="icon-btn" title="Log out" hidden>&#x2715;</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ LOGIN ============ -->
+    <section id="screen-login" class="screen">
+      <div class="card login-card">
+        <div class="login-emoji">&#x1F3CB;&#xFE0F;</div>
+        <h2>Welcome back</h2>
+        <p class="muted">Connect to your workout sheet to get started.</p>
+        <label class="field">
+          <span>Apps Script URL</span>
+          <input id="login-url" type="url" placeholder="https://script.google.com/macros/s/…/exec"
+                 autocomplete="off" autocapitalize="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Passphrase</span>
+          <input id="login-pass" type="password" placeholder="Your passphrase" />
+        </label>
+        <p id="login-error" class="error" hidden></p>
+        <button id="btn-login" class="primary">Connect</button>
+        <p class="muted small">Tip: type <code>demo</code> as the URL to try the app without a sheet.</p>
+      </div>
+    </section>
+
+    <!-- ============ HOME ============ -->
+    <section id="screen-home" class="screen" hidden>
+      <h2 class="section-title">Week</h2>
+      <div id="week-chips" class="week-chips"></div>
+      <h2 class="section-title">Sessions</h2>
+      <div id="session-cards" class="session-cards"></div>
+    </section>
+
+    <!-- ============ PLAYER ============ -->
+    <section id="screen-player" class="screen" hidden>
+      <div class="player-head">
+        <button id="btn-quit" class="icon-btn" title="Back to sessions">&#x2190;</button>
+        <div class="player-progress">
+          <div id="player-session-label" class="muted small"></div>
+          <div id="player-progress-bar" class="progress-bar"><div></div></div>
+        </div>
+      </div>
+
+      <!-- exercise view -->
+      <div id="view-exercise" class="card exercise-card">
+        <p id="ex-group" class="pill"></p>
+        <h2 id="ex-name"></h2>
+        <p id="ex-setinfo" class="set-info"></p>
+
+        <div class="rest-settings">
+          <label class="field small-field">
+            <span id="rest-a-label">Rest between sets</span>
+            <div class="suffix-input"><input id="rest-a" type="text" inputmode="numeric" /><em>sec</em></div>
+          </label>
+          <label class="field small-field">
+            <span id="rest-b-label">Rest between exercises</span>
+            <div class="suffix-input"><input id="rest-b" type="text" inputmode="numeric" /><em>sec</em></div>
+          </label>
+        </div>
+
+        <div class="inputs-row">
+          <label class="field">
+            <span>Weight</span>
+            <input id="in-weight" type="text" inputmode="decimal" placeholder="e.g. 12.5" />
+          </label>
+          <label class="field">
+            <span>Goal: <strong id="ex-goal"></strong></span>
+            <input id="in-reps" type="text" inputmode="numeric" placeholder="reps done" />
+          </label>
+        </div>
+
+        <div id="prev-results" class="muted small"></div>
+      </div>
+
+      <!-- rest view -->
+      <div id="view-rest" class="rest-view" hidden>
+        <p class="rest-title">Rest</p>
+        <div class="timer-wrap">
+          <svg viewBox="0 0 200 200" class="timer-svg">
+            <defs>
+              <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#b8a7e9"/>
+                <stop offset="50%" stop-color="#f5c6dd"/>
+                <stop offset="100%" stop-color="#a7c7e7"/>
+              </linearGradient>
+            </defs>
+            <circle class="timer-track" cx="100" cy="100" r="88"/>
+            <circle class="timer-progress" cx="100" cy="100" r="88"/>
+          </svg>
+          <div id="timer-label" class="timer-label">60</div>
+        </div>
+        <p id="rest-next" class="muted"></p>
+        <div class="rest-actions">
+          <button id="btn-add15" class="ghost">+15s</button>
+          <button id="btn-skip" class="ghost">Skip rest</button>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <button id="btn-advance" class="primary big"></button>
+      </div>
+    </section>
+
+    <!-- ============ SUMMARY ============ -->
+    <section id="screen-summary" class="screen" hidden>
+      <div class="card summary-card">
+        <div class="login-emoji">&#x1F389;</div>
+        <h2>Session complete!</h2>
+        <p id="summary-sub" class="muted"></p>
+        <div id="summary-list" class="summary-list"></div>
+        <button id="btn-done" class="primary">Back to sessions</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/demo.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

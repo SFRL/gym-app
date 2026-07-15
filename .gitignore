@@ -1,0 +1,5 @@
+.DS_Store
+node_modules/
+
+# Real workout plan data stays local — the repo is public.
+test/fixtures/sheet_values.json

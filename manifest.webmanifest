@@ -1,0 +1,14 @@
+{
+  "name": "GymPlan",
+  "short_name": "GymPlan",
+  "description": "Guided workout sessions from your Google Sheet training plan",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#faf8fe",
+  "theme_color": "#f6f2fc",
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
