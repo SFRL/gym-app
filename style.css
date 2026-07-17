@@ -286,6 +286,10 @@ code { background: var(--lavender-soft); border-radius: 6px; padding: 1px 6px; }
   max-width: 480px;
   margin: 0 auto;
 }
+.bottom-buttons { display: flex; gap: 10px; }
+.bottom-buttons .primary { flex: 1; }
+.back-btn { flex: 0 0 auto; padding: 15px 20px; font-size: 17px; }
+.summary-back { width: 100%; margin-bottom: 10px; }
 
 /* ---------- summary ---------- */
 .summary-card { margin-top: 6vh; text-align: center; }

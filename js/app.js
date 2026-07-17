@@ -208,6 +208,27 @@
     return null;
   }
 
+  function prevSetIndex(from) {
+    for (let i = from - 1; i >= 0; i--) {
+      if (state.seq[i].type === 'set') return i;
+    }
+    return -1;
+  }
+
+  /** Steps back one set — from a rest, back to the set just done; from the
+      first set, back to the session list. Recorded values stay editable. */
+  function goBack() {
+    if (state.timer) state.timer.stop();
+    const target = prevSetIndex(state.pos);
+    if (target === -1) {
+      renderHome();
+      show('home');
+      return;
+    }
+    state.pos = target;
+    renderStep();
+  }
+
   function renderStep() {
     const step = currentStep();
     if (!step) return finishSession();
@@ -365,6 +386,26 @@
     readRestInputs();
     commitCurrentSet();
     state.pos++;
+    // Re-advancing over a set that already has recorded reps (after going
+    // back to fix something) shouldn't force another rest countdown.
+    const next = currentStep();
+    if (next?.type === 'rest') {
+      const upcoming = nextSetStep(state.pos);
+      if (upcoming) {
+        const ex = state.session.exercises[upcoming.exIdx];
+        if ((state.results[ex.row] || [])[upcoming.setNum - 1] != null) state.pos++;
+      }
+    }
+    renderStep();
+  });
+
+  $('btn-back').addEventListener('click', goBack);
+
+  $('btn-back-summary').addEventListener('click', () => {
+    const target = prevSetIndex(state.seq.length);
+    if (target === -1) return;
+    state.pos = target;
+    show('player');
     renderStep();
   });
 
