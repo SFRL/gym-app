@@ -15,6 +15,8 @@
  *  POST {pass, action:"update", updates:[{session, week, row, field, value}]}
  *       field: "sets" | "weight" | "repGoal" | "repResults"
  *  POST {pass, action:"setRest", session, week, rest:{sets?, exercises?, rounds?}}
+ *  POST {pass, action:"extendWeek", week} — appends week columns (copying the
+ *       last week's headers, sets and rep goals) until that week exists.
  * POST bodies are sent as text/plain to avoid CORS preflight.
  */
 
@@ -47,6 +49,8 @@ function handleRequest(req) {
         return jsonResponse(applyUpdates(req.updates || []));
       case 'setRest':
         return jsonResponse(applyRest(req));
+      case 'extendWeek':
+        return jsonResponse(applyExtendWeek(req));
       default:
         return jsonResponse({ ok: false, error: 'unknown_action' });
     }
@@ -129,6 +133,29 @@ function applyRest(req) {
       : text + ' ' + newText;
     cell.setValue(updated);
     return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Appends new week blocks until `req.week` exists, copying structure from the last week. */
+function applyExtendWeek(req) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var target = Number(req.week);
+    if (!target || target < 1 || target > 200) return { ok: false, error: 'bad_week' };
+    var found = findPlanSheet();
+    var guard = 0;
+    while (found.plan.weekCount < target && guard++ < 12) {
+      var values = found.sheet.getDataRange().getDisplayValues();
+      var writes = buildWeekExtension(values, found.plan);
+      for (var i = 0; i < writes.length; i++) {
+        found.sheet.getRange(writes[i].row, writes[i].col).setValue(writes[i].value);
+      }
+      found = findPlanSheet();
+    }
+    return { ok: true, plan: found.plan };
   } finally {
     lock.releaseLock();
   }
@@ -224,10 +251,7 @@ function cellString(row, col) {
 /** Reads the field-header row + exercise rows that follow a session header row. */
 function readSessionBlock(values, headerRowIdx) {
   // The field-header row is the next row whose column B says "Exercise".
-  var fieldRow = -1;
-  for (var r = headerRowIdx + 1; r < Math.min(headerRowIdx + 4, values.length); r++) {
-    if (/^exercise$/i.test(cellString(values[r], 1))) { fieldRow = r; break; }
-  }
+  var fieldRow = findFieldRow(values, headerRowIdx);
   if (fieldRow === -1) return null;
 
   var label = cellString(values[fieldRow], 0);
@@ -253,6 +277,53 @@ function readSessionBlock(values, headerRowIdx) {
   if (exercises.length === 0) return null;
 
   return { label: label, type: type, rounds: rounds, exercises: exercises };
+}
+
+/**
+ * Computes the cell writes (1-based row/col) that append one new week block
+ * to the right of the last one: session headers with the same rest text, the
+ * field-header labels, and each exercise's Sets and Rep Goal copied from the
+ * last week. Weight and Rep Results start empty. Pure — unit-tested in Node.
+ */
+function buildWeekExtension(values, plan) {
+  var newWeek = plan.weekCount + 1;
+  var writes = [];
+  for (var s = 0; s < plan.sessions.length; s++) {
+    var session = plan.sessions[s];
+    var last = session.weeks[String(plan.weekCount)];
+    if (!last) continue;
+    var newCol = last.col + 4;
+    writes.push({
+      row: last.headerRow,
+      col: newCol,
+      value: 'Week ' + newWeek + ': ' + session.title + ' (' + last.restRaw + ')'
+    });
+    // Field-header labels (Sets | Weight | Rep Goal | Rep Results)
+    var fieldRowIdx = findFieldRow(values, last.headerRow - 1);
+    if (fieldRowIdx !== -1) {
+      for (var k = 0; k < 4; k++) {
+        writes.push({
+          row: fieldRowIdx + 1,
+          col: newCol + k,
+          value: cellString(values[fieldRowIdx], last.col - 1 + k)
+        });
+      }
+    }
+    for (var e = 0; e < session.exercises.length; e++) {
+      var row = session.exercises[e].row;
+      var entry = last.entries[e];
+      if (entry.sets) writes.push({ row: row, col: newCol, value: entry.sets });
+      if (entry.repGoal) writes.push({ row: row, col: newCol + 2, value: entry.repGoal });
+    }
+  }
+  return writes;
+}
+
+function findFieldRow(values, headerRowIdx) {
+  for (var r = headerRowIdx + 1; r < Math.min(headerRowIdx + 4, values.length); r++) {
+    if (/^exercise$/i.test(cellString(values[r], 1))) return r;
+  }
+  return -1;
 }
 
 var DURATION_RE = /(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?\s*(secs?|s\b|mins?|m\b)/gi;
@@ -288,5 +359,10 @@ function parseRest(headerText, type) {
 
 /* Test hook (ignored by Apps Script, used by the Node unit tests). */
 if (typeof module !== 'undefined') {
-  module.exports = { parsePlan: parsePlan, parseRest: parseRest, readSessionBlock: readSessionBlock };
+  module.exports = {
+    parsePlan: parsePlan,
+    parseRest: parseRest,
+    readSessionBlock: readSessionBlock,
+    buildWeekExtension: buildWeekExtension
+  };
 }

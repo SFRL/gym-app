@@ -10,7 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(join(here, '../apps-script/Code.gs'), 'utf8');
 const mod = { exports: {} };
 new Function('module', source)(mod);
-const { parsePlan, parseRest } = mod.exports;
+const { parsePlan, parseRest, buildWeekExtension } = mod.exports;
 
 const values = JSON.parse(readFileSync(join(here, 'fixtures/sheet_values.json'), 'utf8'));
 const plan = parsePlan(values);
@@ -99,6 +99,32 @@ test('a Week 7 block added to the sheet is picked up automatically', () => {
   const p2 = parsePlan(extended);
   assert.equal(p2.weekCount, 7);
   assert.equal(p2.sessions[0].weeks['7'].rest.sets, 40);
+});
+
+test('buildWeekExtension appends a parseable Week 7 with copied sets/goals', () => {
+  const extended = values.map((row) => row.slice());
+  const writes = buildWeekExtension(extended, plan);
+  assert.ok(writes.length > 0);
+  for (const w of writes) {
+    while (extended[w.row - 1].length < w.col) extended[w.row - 1].push('');
+    extended[w.row - 1][w.col - 1] = w.value;
+  }
+  const p2 = parsePlan(extended);
+  assert.equal(p2.weekCount, 7);
+  for (const s of p2.sessions) {
+    const wk7 = s.weeks['7'];
+    const wk6 = s.weeks['6'];
+    assert.ok(wk7, s.title + ' has week 7');
+    assert.equal(wk7.entries.length, s.exercises.length);
+    wk7.entries.forEach((e, i) => {
+      assert.equal(e.repGoal, wk6.entries[i].repGoal);
+      assert.equal(e.sets, wk6.entries[i].sets);
+      assert.equal(e.weight, '');
+      assert.equal(e.repResults, '');
+    });
+    // Rest text carried over from week 6
+    assert.deepEqual(wk7.rest, wk6.rest, s.title + ' rest copied');
+  }
 });
 
 test('parseRest handles decimal minutes and ranges', () => {

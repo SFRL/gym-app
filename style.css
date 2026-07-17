@@ -156,26 +156,17 @@ code { background: var(--lavender-soft); border-radius: 6px; padding: 1px 6px; }
 /* ---------- home ---------- */
 .section-title { font-size: 15px; color: var(--muted); margin: 22px 4px 10px; text-transform: uppercase; letter-spacing: 1px; }
 
-.week-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px; }
-.week-chip {
-  border: none;
-  min-width: 52px;
-  padding: 12px 0;
-  border-radius: 16px;
-  background: var(--card);
-  box-shadow: var(--shadow);
-  color: var(--muted);
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.week-chip.active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--lavender), var(--pink));
-}
-
 .session-cards { display: grid; gap: 14px; }
+.week-badge {
+  float: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.home-hint { text-align: center; margin-top: 18px; }
 .session-card {
   text-align: left;
   border: none;

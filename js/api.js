@@ -74,6 +74,14 @@ const GymAPI = (() => {
   const saveCell = (session, week, row, field, value) =>
     enqueue({ kind: 'update', session, week, row, field, value: String(value) });
 
+  /** Asks the script to append week columns until `week` exists; returns the fresh plan. */
+  async function extendWeek(week) {
+    if (isDemo()) return extendDemoWeek(week);
+    await flush(); // don't let queued writes race the structure change
+    const data = await call({ action: 'extendWeek', week });
+    return data.plan;
+  }
+
   const saveRest = (session, week, rest) => enqueue({ kind: 'rest', session, week, rest });
 
   async function flush() {
@@ -133,9 +141,26 @@ const GymAPI = (() => {
     localStorage.setItem(DEMO_PLAN_KEY, JSON.stringify(plan));
   }
 
+  function extendDemoWeek(targetWeek) {
+    const plan = JSON.parse(localStorage.getItem(DEMO_PLAN_KEY) || 'null') ||
+      JSON.parse(JSON.stringify(window.GYM_DEMO_PLAN));
+    while (plan.weekCount < targetWeek) {
+      const newWeek = ++plan.weekCount;
+      for (const session of plan.sessions) {
+        const last = session.weeks[String(newWeek - 1)];
+        if (!last) continue;
+        const copy = JSON.parse(JSON.stringify(last));
+        copy.entries.forEach((e) => { e.weight = ''; e.repResults = ''; });
+        session.weeks[String(newWeek)] = copy;
+      }
+    }
+    localStorage.setItem(DEMO_PLAN_KEY, JSON.stringify(plan));
+    return plan;
+  }
+
   return {
     getConfig, setConfig, clearConfig, isDemo,
-    fetchPlan, saveCell, saveRest, flush, startAutoFlush,
+    fetchPlan, saveCell, saveRest, extendWeek, flush, startAutoFlush,
     onQueueChange, pendingCount: () => queue().length,
   };
 })();

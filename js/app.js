@@ -90,29 +90,31 @@
 
   /* ================= home ================= */
 
+  /**
+   * A session-week counts as completed when every exercise has a Rep Results
+   * value in the sheet — which is exactly what finishing it in the app writes.
+   * A partially finished week is resumed; a fully finished one moves the
+   * session on to the next week (created in the sheet on demand).
+   */
+  function isWeekCompleted(session, w) {
+    const wk = session.weeks[String(w)];
+    return !!wk && wk.entries.length > 0 && wk.entries.every((e) => e.repResults.trim() !== '');
+  }
+
+  function sessionCurrentWeek(session) {
+    for (let w = 1; w <= state.plan.weekCount; w++) {
+      if (session.weeks[String(w)] && !isWeekCompleted(session, w)) return w;
+    }
+    return state.plan.weekCount + 1; // everything done -> a new week is needed
+  }
+
   function renderHome() {
     const plan = state.plan;
-    state.week = Math.min(store.get('gym.week', 1), plan.weekCount);
-
-    const chips = $('week-chips');
-    chips.innerHTML = '';
-    for (let w = 1; w <= plan.weekCount; w++) {
-      const b = document.createElement('button');
-      b.className = 'week-chip' + (w === state.week ? ' active' : '');
-      b.textContent = w;
-      b.addEventListener('click', () => {
-        state.week = w;
-        store.set('gym.week', w);
-        renderHome();
-      });
-      chips.appendChild(b);
-    }
-
     const cards = $('session-cards');
     cards.innerHTML = '';
-    const completed = store.get('gym.completed', {});
     for (const session of plan.sessions) {
-      const wk = session.weeks[String(state.week)];
+      const week = sessionCurrentWeek(session);
+      const wk = session.weeks[String(Math.min(week, plan.weekCount))];
       if (!wk) continue;
       const card = document.createElement('button');
       card.className = 'session-card';
@@ -121,9 +123,11 @@
       const restInfo = session.type === 'circuit'
         ? `rest ${wk.rest.exercises}s / ${fmtSecs(wk.rest.rounds)}`
         : `rest ${fmtSecs(wk.rest.sets)}`;
-      const doneTag = completed[`w${state.week}.s${session.id}`] ? '<span class="done-tag">Done ✓</span>' : '';
+      const resume = week <= plan.weekCount &&
+        session.weeks[String(week)].entries.some((e) => e.repResults.trim() !== '');
+      const badge = `<span class="week-badge">Week ${week}${resume ? ' · continue' : ''}</span>`;
       card.innerHTML = `
-        <h3>${session.title} ${doneTag}</h3>
+        <h3>${session.title} ${badge}</h3>
         <div class="sub">${escapeHtml(session.label)} · ${restInfo}</div>
         <div class="ex-preview">${escapeHtml(preview)}</div>`;
       card.addEventListener('click', () => startSession(session));
@@ -136,7 +140,23 @@
 
   /* ================= workout player ================= */
 
-  function startSession(session) {
+  async function startSession(session) {
+    let week = sessionCurrentWeek(session);
+
+    // Past the last week in the sheet: have the Apps Script append a new
+    // week block (copying sets/goals from the previous one), then reload.
+    if (week > state.plan.weekCount) {
+      try {
+        state.plan = await GymAPI.extendWeek(week);
+        session = state.plan.sessions.find((s) => s.id === session.id) || session;
+        week = Math.min(week, state.plan.weekCount);
+      } catch (err) {
+        alert('Could not add a new week to the sheet — check your connection.');
+        return;
+      }
+    }
+
+    state.week = week;
     const wk = session.weeks[String(state.week)];
     state.session = session;
     state.results = {};
@@ -220,9 +240,12 @@
     const prevEntry = session.weeks[String(state.week - 1)]?.entries[step.exIdx];
     $('in-weight').value = state.weights[ex.row] ?? (entry.weight || prevEntry?.weight || '');
 
-    // Reps: previous entry for this set, else a prefill guessed from the goal.
+    // Reps: this session's entry for the set, else last week's result for the
+    // same set (the trainer's "match last week" rule), else a goal-based guess.
     const recorded = (state.results[ex.row] || [])[step.setNum - 1];
-    $('in-reps').value = recorded ?? prefillFromGoal(entry.repGoal);
+    const prevSet = (prevEntry?.repResults || '').split(',')[step.setNum - 1]?.trim();
+    const prevReps = prevSet && prevSet !== '-' ? prevSet : undefined;
+    $('in-reps').value = recorded ?? prevReps ?? prefillFromGoal(entry.repGoal);
     $('in-reps').placeholder = entry.repGoal || 'reps';
 
     const prevBits = [];
@@ -370,10 +393,6 @@
     if (state.timer) state.timer.stop();
     const session = state.session;
     const wk = session.weeks[String(state.week)];
-
-    const completed = store.get('gym.completed', {});
-    completed[`w${state.week}.s${session.id}`] = Date.now();
-    store.set('gym.completed', completed);
 
     $('summary-sub').textContent = `${session.title} · Week ${state.week}`;
     const list = $('summary-list');
