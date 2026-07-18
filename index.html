@@ -51,6 +51,33 @@
       <p class="muted small home-hint">Each session continues automatically at its next unfinished week.</p>
     </section>
 
+    <!-- ============ SESSION OVERVIEW ============ -->
+    <section id="screen-overview" class="screen" hidden>
+      <div class="player-head">
+        <button id="btn-overview-back" class="icon-btn" title="Back">&#x2190;</button>
+        <div class="player-progress">
+          <div id="ov-title" class="ov-title"></div>
+          <div id="ov-sub" class="muted small"></div>
+        </div>
+      </div>
+      <div class="card ov-rest-card">
+        <div class="rest-settings">
+          <label class="field small-field">
+            <span id="ov-rest-a-label">Rest between sets</span>
+            <div class="suffix-input"><input id="ov-rest-a" type="text" inputmode="numeric" /><em>sec</em></div>
+          </label>
+          <label class="field small-field">
+            <span id="ov-rest-b-label">Rest between exercises</span>
+            <div class="suffix-input"><input id="ov-rest-b" type="text" inputmode="numeric" /><em>sec</em></div>
+          </label>
+        </div>
+      </div>
+      <div id="ov-list" class="ov-list"></div>
+      <div class="bottom-bar">
+        <button id="btn-start-workout" class="primary big">Start workout</button>
+      </div>
+    </section>
+
     <!-- ============ PLAYER ============ -->
     <section id="screen-player" class="screen" hidden>
       <div class="player-head">
@@ -59,6 +86,7 @@
           <div id="player-session-label" class="muted small"></div>
           <div id="player-progress-bar" class="progress-bar"><div></div></div>
         </div>
+        <button id="btn-info" class="icon-btn" title="Session overview">&#x24D8;</button>
       </div>
 
       <!-- exercise view -->
@@ -113,6 +141,20 @@
         <div class="rest-actions">
           <button id="btn-add15" class="ghost">+15s</button>
           <button id="btn-skip" class="ghost">Skip rest</button>
+        </div>
+      </div>
+
+      <!-- timed-set work view -->
+      <div id="view-work" class="rest-view" hidden>
+        <p id="work-side" class="rest-title"></p>
+        <h2 id="work-name" class="work-name"></h2>
+        <div id="work-phase" class="work-phase" hidden>Ready</div>
+        <div class="timer-wrap" id="work-timer-wrap">
+          <svg viewBox="0 0 200 200" class="timer-svg">
+            <circle class="timer-track" cx="100" cy="100" r="88"/>
+            <circle class="timer-progress" cx="100" cy="100" r="88"/>
+          </svg>
+          <div id="work-timer-label" class="timer-label">45</div>
         </div>
       </div>
 

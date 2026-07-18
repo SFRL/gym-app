@@ -5,7 +5,7 @@ window.GYM_DEMO_PLAN = (() => {
   const straight = [
     { name: 'Goblet squat', group: 'Legs', goal: '10-12' },
     { name: 'Bench press', group: 'Chest', goal: '8-10' },
-    { name: 'Plank hold', group: 'Core', goal: '45 secs' },
+    { name: 'Side plank (per side)', group: 'Core', goal: '45 secs' },
     { name: 'Pull ups', group: 'Back', goal: 'MAX' },
   ];
   const circuit = [

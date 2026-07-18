@@ -275,6 +275,38 @@ code { background: var(--lavender-soft); border-radius: 6px; padding: 1px 6px; }
 }
 .rest-actions { display: flex; justify-content: center; gap: 12px; margin-top: 6px; }
 
+/* ---------- timed-set work view ---------- */
+.work-name { margin: 4px 0 10px; font-size: 24px; }
+.work-phase {
+  font-size: 64px;
+  font-weight: 800;
+  padding: 70px 0;
+  background: linear-gradient(90deg, var(--lavender), #e8a3c8, var(--blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: phasepop 0.4s ease;
+}
+@keyframes phasepop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ---------- session overview ---------- */
+.ov-title { font-size: 17px; font-weight: 700; }
+.ov-rest-card { padding: 10px 16px 16px; margin-bottom: 14px; }
+.ov-list { display: grid; gap: 10px; }
+.ov-row {
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.ov-row .name { font-weight: 600; font-size: 15px; }
+.ov-row .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.ov-row .target { color: var(--accent); font-weight: 700; font-size: 14px; white-space: nowrap; }
+
 /* ---------- bottom bar ---------- */
 .bottom-bar {
   position: fixed;

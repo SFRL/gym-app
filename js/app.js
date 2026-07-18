@@ -9,6 +9,7 @@
     screens: {
       login: $('screen-login'),
       home: $('screen-home'),
+      overview: $('screen-overview'),
       player: $('screen-player'),
       summary: $('screen-summary'),
     },
@@ -30,8 +31,19 @@
     results: {},     // row -> array of rep strings per set
     weights: {},     // row -> weight string
     rest: {},        // active rest seconds {sets, exercises, rounds}
-    timer: null,
+    timer: null,     // rest countdown
+    workTimer: null, // timed-set countdown
+    work: null,      // {side: 0|1|2, seconds} while a timed set runs
+    started: false,  // workout begun (vs. still on the overview)
   };
+
+  let workTimeouts = [];
+  function stopAllTimers() {
+    if (state.timer) state.timer.stop();
+    if (state.workTimer) state.workTimer.stop();
+    workTimeouts.forEach(clearTimeout);
+    workTimeouts = [];
+  }
 
   /* ================= navigation ================= */
 
@@ -130,7 +142,7 @@
         <h3>${session.title} ${badge}</h3>
         <div class="sub">${escapeHtml(session.label)} · ${restInfo}</div>
         <div class="ex-preview">${escapeHtml(preview)}</div>`;
-      card.addEventListener('click', () => startSession(session));
+      card.addEventListener('click', () => openSession(session));
       cards.appendChild(card);
     }
   }
@@ -140,7 +152,7 @@
 
   /* ================= workout player ================= */
 
-  async function startSession(session) {
+  async function openSession(session) {
     let week = sessionCurrentWeek(session);
 
     // Past the last week in the sheet: have the Apps Script append a new
@@ -171,10 +183,73 @@
       ? { exercises: ovr.exercises ?? wk.rest.exercises, rounds: ovr.rounds ?? wk.rest.rounds }
       : { sets: ovr.sets ?? wk.rest.sets, exercises: ovr.exercises ?? wk.rest.sets };
 
+    state.started = false;
+    state.work = null;
     $('player-session-label').textContent = `${session.title} · Week ${state.week} · ${session.label}`;
+    renderOverview();
+    show('overview');
+  }
+
+  /* ---- session overview (pre-start, and via the ⓘ button mid-session) ---- */
+
+  function renderOverview() {
+    const session = state.session;
+    const wk = session.weeks[String(state.week)];
+    $('ov-title').textContent = `${session.title} · Week ${state.week}`;
+    $('ov-sub').textContent = session.label;
+
+    $('ov-rest-a-label').textContent = session.type === 'circuit' ? 'Rest between exercises' : 'Rest between sets';
+    $('ov-rest-b-label').textContent = session.type === 'circuit' ? 'Rest between rounds' : 'Rest between exercises';
+    $('ov-rest-a').value = session.type === 'circuit' ? state.rest.exercises : state.rest.sets;
+    $('ov-rest-b').value = session.type === 'circuit' ? state.rest.rounds : state.rest.exercises;
+
+    const list = $('ov-list');
+    list.innerHTML = '';
+    session.exercises.forEach((ex, i) => {
+      const entry = wk.entries[i];
+      const prevEntry = session.weeks[String(state.week - 1)]?.entries[i];
+      const setsLabel = session.type === 'circuit'
+        ? `${session.rounds} rounds`
+        : `${parseInt(entry.sets, 10) || 3} sets`;
+      const weight = entry.weight || prevEntry?.weight || '';
+      const row = document.createElement('div');
+      row.className = 'ov-row';
+      row.innerHTML = `
+        <div>
+          <div class="name">${escapeHtml(ex.name)}</div>
+          <div class="meta">${escapeHtml([ex.group, weight && `weight ${weight}`].filter(Boolean).join(' · '))}</div>
+        </div>
+        <div class="target">${escapeHtml(setsLabel)} × ${escapeHtml(entry.repGoal || '—')}</div>`;
+      list.appendChild(row);
+    });
+
+    $('btn-start-workout').textContent = state.started ? 'Resume workout' : 'Start workout';
+  }
+
+  $('btn-start-workout').addEventListener('click', () => {
+    state.started = true;
     show('player');
     renderStep();
-  }
+  });
+
+  $('btn-overview-back').addEventListener('click', () => {
+    if (state.started) {
+      show('player');
+      renderStep();
+    } else {
+      renderHome();
+      show('home');
+    }
+  });
+
+  $('btn-info').addEventListener('click', () => {
+    stopAllTimers();
+    renderOverview();
+    show('overview');
+  });
+
+  $('ov-rest-a').addEventListener('change', () => applyRestValues($('ov-rest-a').value, $('ov-rest-b').value));
+  $('ov-rest-b').addEventListener('change', () => applyRestValues($('ov-rest-a').value, $('ov-rest-b').value));
 
   /** Builds the ordered list of set-steps and rest-steps for a session. */
   function buildSequence(session, wk) {
@@ -218,7 +293,8 @@
   /** Steps back one set — from a rest, back to the set just done; from the
       first set, back to the session list. Recorded values stay editable. */
   function goBack() {
-    if (state.timer) state.timer.stop();
+    stopAllTimers();
+    state.work = null;
     const target = prevSetIndex(state.pos);
     if (target === -1) {
       renderHome();
@@ -236,6 +312,104 @@
     renderSet(step);
   }
 
+  /* ---- timed sets ("45 secs" goals) ---- */
+
+  const TIMED_RE = /\d(?:\s*-\s*\d+)?\s*(secs?|mins?|s|m)\b/i;
+  const isTimedGoal = (goal) => TIMED_RE.test(goal || '');
+  const isPerSide = (name) => /per side|each side/i.test(name || '');
+
+  function workSeconds(inputVal, goal) {
+    for (const text of [inputVal, goal]) {
+      const m = /(\d+(?:\.\d+)?)/.exec(text || '');
+      if (m) {
+        let v = Number(m[1]);
+        if (/min/i.test(text)) v *= 60;
+        return Math.max(1, Math.round(v));
+      }
+    }
+    return 30;
+  }
+
+  function advanceLabel(step) {
+    const upcoming = nextSetStep(state.pos);
+    if (!upcoming) return 'Finish session';
+    if (state.session.type === 'circuit') return upcoming.setNum !== step.setNum ? 'Next round' : 'Next exercise';
+    return upcoming.exIdx === step.exIdx ? 'Next set' : 'Next exercise';
+  }
+
+  function enterWork() {
+    const step = currentStep();
+    const ex = state.session.exercises[step.exIdx];
+    const entry = state.session.weeks[String(state.week)].entries[step.exIdx];
+    state.work = {
+      side: isPerSide(ex.name) ? 1 : 0, // 0 = single run
+      seconds: workSeconds($('in-reps').value, entry.repGoal),
+    };
+    renderWork();
+  }
+
+  /** Ready → Set → Go (1s each), then the work countdown. */
+  function renderWork(step = currentStep()) {
+    const ex = state.session.exercises[step.exIdx];
+    stopAllTimers();
+    $('view-exercise').hidden = true;
+    $('view-rest').hidden = true;
+    $('view-work').hidden = false;
+
+    const unit = state.session.type === 'circuit' ? 'Round' : 'Set';
+    $('work-side').textContent = state.work.side
+      ? `Side ${state.work.side} · ${unit} ${step.setNum} of ${step.totalSets}`
+      : `${unit} ${step.setNum} of ${step.totalSets}`;
+    $('work-name').textContent = ex.name;
+    $('btn-back').textContent = 'Cancel';
+    $('btn-advance').textContent = state.work.side === 1 ? 'Next side' : advanceLabel(step);
+
+    const phase = $('work-phase');
+    const wrap = $('work-timer-wrap');
+    phase.hidden = false;
+    wrap.style.visibility = 'hidden';
+    $('work-timer-label').textContent = state.work.seconds;
+    ['Ready', 'Set', 'Go'].forEach((text, i) => {
+      workTimeouts.push(setTimeout(() => {
+        phase.textContent = text;
+        phase.style.animation = 'none';
+        void phase.offsetWidth; // restart the pop animation
+        phase.style.animation = '';
+      }, i * 1000));
+    });
+    workTimeouts.push(setTimeout(() => {
+      phase.hidden = true;
+      wrap.style.visibility = 'visible';
+      state.workTimer = state.workTimer || new RestTimer(
+        document.querySelector('#view-work .timer-progress'),
+        $('work-timer-label'),
+        () => {} // stay on screen; user advances with the bottom button
+      );
+      state.workTimer.start(state.work.seconds);
+    }, 3000));
+    updateProgress();
+  }
+
+  function cancelWork() {
+    stopAllTimers();
+    state.work = null;
+    $('view-work').hidden = true;
+    renderStep();
+  }
+
+  function advanceFromWork() {
+    if (state.work.side === 1) {
+      state.work.side = 2;
+      renderWork();
+      return;
+    }
+    stopAllTimers();
+    state.work = null;
+    $('view-work').hidden = true;
+    commitCurrentSet();
+    advancePos();
+  }
+
   function renderSet(step) {
     const session = state.session;
     const wk = session.weeks[String(state.week)];
@@ -243,7 +417,9 @@
     const entry = wk.entries[step.exIdx];
 
     $('view-rest').hidden = true;
+    $('view-work').hidden = true;
     $('view-exercise').hidden = false;
+    $('btn-back').textContent = 'Back';
 
     $('ex-group').textContent = ex.group || ' ';
     $('ex-name').textContent = ex.name;
@@ -274,11 +450,7 @@
     if (prevEntry?.repResults) prevBits.push(prevEntry.repResults);
     $('prev-results').textContent = prevBits.length > 0 ? `Last week: ${prevBits.join(' — ')}` : '';
 
-    const upcoming = nextSetStep(state.pos);
-    const btn = $('btn-advance');
-    if (!upcoming) btn.textContent = 'Finish session';
-    else if (session.type === 'circuit') btn.textContent = upcoming.setNum !== step.setNum ? 'Next round' : 'Next exercise';
-    else btn.textContent = upcoming.exIdx === step.exIdx ? 'Next set' : 'Next exercise';
+    $('btn-advance').textContent = isTimedGoal(entry.repGoal) ? 'Start set' : advanceLabel(step);
 
     updateProgress();
   }
@@ -318,9 +490,13 @@
   }
 
   function readRestInputs() {
+    applyRestValues($('rest-a').value, $('rest-b').value);
+  }
+
+  function applyRestValues(aRaw, bRaw) {
     const session = state.session;
-    const a = parseInt($('rest-a').value, 10);
-    const b = parseInt($('rest-b').value, 10);
+    const a = parseInt(aRaw, 10);
+    const b = parseInt(bRaw, 10);
     const next = session.type === 'circuit'
       ? { exercises: isNaN(a) ? state.rest.exercises : a, rounds: isNaN(b) ? state.rest.rounds : b }
       : { sets: isNaN(a) ? state.rest.sets : a, exercises: isNaN(b) ? state.rest.exercises : b };
@@ -352,7 +528,9 @@
     if (!seconds || seconds <= 0) { state.pos++; return renderStep(); }
 
     $('view-exercise').hidden = true;
+    $('view-work').hidden = true;
     $('view-rest').hidden = false;
+    $('btn-back').textContent = 'Back';
     $('btn-advance').textContent = 'Skip rest';
 
     const upcoming = nextSetStep(state.pos);
@@ -379,15 +557,9 @@
     renderStep();
   }
 
-  $('btn-advance').addEventListener('click', () => {
-    const step = currentStep();
-    if (!step) return;
-    if (step.type === 'rest') return advanceFromRest();
-    readRestInputs();
-    commitCurrentSet();
+  /** pos++ with the rest-skip rule for re-traversed (already recorded) sets. */
+  function advancePos() {
     state.pos++;
-    // Re-advancing over a set that already has recorded reps (after going
-    // back to fix something) shouldn't force another rest countdown.
     const next = currentStep();
     if (next?.type === 'rest') {
       const upcoming = nextSetStep(state.pos);
@@ -397,9 +569,24 @@
       }
     }
     renderStep();
+  }
+
+  $('btn-advance').addEventListener('click', () => {
+    const step = currentStep();
+    if (!step) return;
+    if (!$('view-work').hidden) return advanceFromWork();
+    if (step.type === 'rest') return advanceFromRest();
+    readRestInputs();
+    const entry = state.session.weeks[String(state.week)].entries[step.exIdx];
+    if (isTimedGoal(entry.repGoal)) return enterWork();
+    commitCurrentSet();
+    advancePos();
   });
 
-  $('btn-back').addEventListener('click', goBack);
+  $('btn-back').addEventListener('click', () => {
+    if (!$('view-work').hidden) return cancelWork();
+    goBack();
+  });
 
   $('btn-back-summary').addEventListener('click', () => {
     const target = prevSetIndex(state.seq.length);
@@ -416,7 +603,8 @@
 
   $('btn-quit').addEventListener('click', () => {
     if (!confirm('Leave this workout? Completed sets are already saved.')) return;
-    if (state.timer) state.timer.stop();
+    stopAllTimers();
+    state.work = null;
     renderHome();
     show('home');
   });
@@ -431,7 +619,7 @@
   /* ================= summary ================= */
 
   function finishSession() {
-    if (state.timer) state.timer.stop();
+    stopAllTimers();
     const session = state.session;
     const wk = session.weeks[String(state.week)];
 
