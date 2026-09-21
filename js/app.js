@@ -314,20 +314,28 @@
 
   /* ---- timed sets ("45 secs" goals) ---- */
 
-  const TIMED_RE = /\d(?:\s*-\s*\d+)?\s*(secs?|mins?|s|m)\b/i;
-  const isTimedGoal = (goal) => TIMED_RE.test(goal || '');
+  const GOAL_DURATION_RE = /(\d+(?:\.\d+)?)\s*(?:-\s*\d+(?:\.\d+)?)?\s*(secs?|mins?|s|m)\b/i;
   const isPerSide = (name) => /per side|each side/i.test(name || '');
 
+  /** Seconds in a duration goal: "45 secs" -> 45, "2 mins" -> 120,
+      "1.5 min" -> 90, "45-60 secs" -> 45 (the lower end). null if not timed. */
+  function goalSeconds(goal) {
+    const m = GOAL_DURATION_RE.exec(goal || '');
+    if (!m) return null;
+    return Math.max(1, Math.round(Number(m[1]) * (/^m/i.test(m[2]) ? 60 : 1)));
+  }
+
+  const isTimedGoal = (goal) => goalSeconds(goal) !== null;
+
   function workSeconds(inputVal, goal) {
-    for (const text of [inputVal, goal]) {
-      const m = /(\d+(?:\.\d+)?)/.exec(text || '');
-      if (m) {
-        let v = Number(m[1]);
-        if (/min/i.test(text)) v *= 60;
-        return Math.max(1, Math.round(v));
-      }
+    // The input holds seconds (that is what prefillFromGoal puts there), but
+    // respect a unit if one was typed by hand.
+    const typed = /(\d+(?:\.\d+)?)/.exec(inputVal || '');
+    if (typed) {
+      const factor = /\d\s*(m\b|min)/i.test(inputVal) ? 60 : 1;
+      return Math.max(1, Math.round(Number(typed[1]) * factor));
     }
-    return 30;
+    return goalSeconds(goal) ?? 30;
   }
 
   function advanceLabel(step) {
@@ -459,9 +467,8 @@
     if (!goal) return '';
     const range = /^(\d+)\s*-\s*(\d+)$/.exec(goal.trim());
     if (range) return range[2];
-    const secs = /^(\d+)/.exec(goal.trim());
-    if (secs && /sec|min/i.test(goal)) return secs[1];
-    return ''; // e.g. MAX -> user fills in
+    const seconds = goalSeconds(goal);
+    return seconds == null ? '' : String(seconds); // e.g. MAX -> user fills in
   }
 
   function commitCurrentSet() {
