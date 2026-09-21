@@ -11,7 +11,7 @@ window.GYM_DEMO_PLAN = (() => {
   const circuit = [
     { name: 'Kettlebell swing', group: 'Full body', goal: '15-20' },
     { name: 'Push ups', group: 'Chest', goal: 'MAX' },
-    { name: 'Mountain climbers', group: 'Core', goal: '30 secs' },
+    { name: 'Mountain climbers', group: 'Core', goal: '1 min' },
   ];
   const weeks = (exs, type) => {
     const out = {};

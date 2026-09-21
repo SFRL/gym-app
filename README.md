@@ -21,6 +21,10 @@ add a `Week 7` block of 4 columns and it appears in the app automatically.
 All values are treated as strings, so rep goals like `10-12`, `45 secs`,
 `MAX` and weights like `12.5` or `red band` all work.
 
+**Changing or replacing your plan:** see
+[docs/writing-a-workout-plan.md](docs/writing-a-workout-plan.md) — the sheet
+layout the parser expects, and how to publish a new plan (no redeploy needed).
+
 ## Setup
 
 ### 1. Google Sheet + Apps Script
@@ -47,7 +51,7 @@ script URL and passphrase never enter this repo.
 ## Development
 
 ```
-node --test test/     # parser tests (needs test/fixtures/sheet_values.json,
-                      # a local JSON dump of the sheet — not committed)
+node --test test/*.test.mjs   # parser tests (need test/fixtures/sheet_values.json,
+                              # a local JSON dump of the sheet — not committed)
 python3 -m http.server -d . 8080   # then open http://localhost:8080, URL "demo"
 ```
